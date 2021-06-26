@@ -51,11 +51,11 @@ def image_align(src_file, dst_file, face_landmarks, output_size=1024, transform_
             img = img.resize(rsize, PIL.Image.ANTIALIAS)
             quad /= shrink
             qsize /= shrink
-
         # Crop.
         border = max(int(np.rint(qsize * 0.1)), 3)
         crop = (int(np.floor(min(quad[:,0]))), int(np.floor(min(quad[:,1]))), int(np.ceil(max(quad[:,0]))), int(np.ceil(max(quad[:,1]))))
         crop = (max(crop[0] - border, 0), max(crop[1] - border, 0), min(crop[2] + border, img.size[0]), min(crop[3] + border, img.size[1]))
+        ret_crop = crop
         if crop[2] - crop[0] < img.size[0] or crop[3] - crop[1] < img.size[1]:
             img = img.crop(crop)
             quad -= crop[0:2]
@@ -63,8 +63,10 @@ def image_align(src_file, dst_file, face_landmarks, output_size=1024, transform_
         # Pad.
         pad = (int(np.floor(min(quad[:,0]))), int(np.floor(min(quad[:,1]))), int(np.ceil(max(quad[:,0]))), int(np.ceil(max(quad[:,1]))))
         pad = (max(-pad[0] + border, 0), max(-pad[1] + border, 0), max(pad[2] - img.size[0] + border, 0), max(pad[3] - img.size[1] + border, 0))
+        ret_pad = None
         if enable_padding and max(pad) > border - 4:
             pad = np.maximum(pad, int(np.rint(qsize * 0.3)))
+            ret_pad = pad
             img = np.pad(np.float32(img), ((pad[1], pad[3]), (pad[0], pad[2]), (0, 0)), 'reflect')
             h, w, _ = img.shape
             y, x, _ = np.ogrid[:h, :w, :1]
@@ -75,10 +77,11 @@ def image_align(src_file, dst_file, face_landmarks, output_size=1024, transform_
             img = PIL.Image.fromarray(np.uint8(np.clip(np.rint(img), 0, 255)), 'RGB')
             quad += pad[:2]
 
+
         # Transform.
+        ret_quad = quad + 0.5
         img = img.transform((transform_size, transform_size), PIL.Image.QUAD, (quad + 0.5).flatten(), PIL.Image.BILINEAR)
         if output_size < transform_size:
             img = img.resize((output_size, output_size), PIL.Image.ANTIALIAS)
 
-        # Save aligned image.
-        img.save(dst_file, 'PNG')
+        return {"crop": ret_crop, "quad": ret_quad, "pad": ret_pad}, img
